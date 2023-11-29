@@ -173,12 +173,6 @@ enter_temp_dir()
 check_need_cloudreve()
 {
     [ $is_installed -eq 0 ] && return 1
-    local i
-    for i in ${!pretend_list[@]}
-    do
-        [ "${pretend_list[$i]}" == "1" ] && return 0
-    done
-    return 1
 }
 #检查Nginx更新
 check_nginx_update()
@@ -1534,26 +1528,6 @@ cat >> $nginx_config<<EOF
         client_max_body_size 0;
     }
 EOF
-        elif [ "${pretend_list[$i]}" == "2" ]; then
-            echo "    root ${nginx_prefix}/html/${true_domain_list[$i]};" >> $nginx_config
-            echo "    include ${nginx_prefix}/conf.d/nextcloud.conf;" >> $nginx_config
-        elif [ "${pretend_list[$i]}" == "3" ]; then
-            if [ $protocol_2 -ne 0 ]; then
-                echo "    location / {" >> $nginx_config
-                echo "        return 403;" >> $nginx_config
-                echo "    }" >> $nginx_config
-            else
-                echo "    return 403;" >> $nginx_config
-            fi
-        elif [ "${pretend_list[$i]}" == "4" ]; then
-            echo "    root ${nginx_prefix}/html/${true_domain_list[$i]};" >> $nginx_config
-        else
-cat >> $nginx_config<<EOF
-    location / {
-        proxy_pass ${pretend_list[$i]};
-        proxy_set_header referer "${pretend_list[$i]}";
-    }
-EOF
         fi
         echo "}" >> $nginx_config
     done
@@ -1711,32 +1685,6 @@ cat >> $xray_config <<EOF
 EOF
 }
 
-#下载nextcloud模板，用于伪装    参数：域名在列表中的位置
-init_web()
-{
-    if ! ([ "${pretend_list[$1]}" == "2" ] || [ "${pretend_list[$1]}" == "4" ]); then
-        return 0
-    fi
-    local url
-    [ ${pretend_list[$1]} -eq 2 ] && url="${nextcloud_url}" || url="https://github.com/kirin10000/Xray-script/raw/main/Website-Template.zip"
-    local info
-    [ ${pretend_list[$1]} -eq 2 ] && info="Nextcloud" || info="网站模板"
-    if ! wget -O "${nginx_prefix}/html/Website.zip" "$url"; then
-        red    "获取${info}失败"
-        yellow "按回车键继续或者按Ctrl+c终止"
-        read -s
-    fi
-    rm -rf "${nginx_prefix}/html/${true_domain_list[$1]}"
-    if [ ${pretend_list[$1]} -eq 4 ]; then
-        mkdir "${nginx_prefix}/html/${true_domain_list[$1]}"
-        unzip -q -d "${nginx_prefix}/html/${true_domain_list[$1]}" "${nginx_prefix}/html/Website.zip"
-    else
-        unzip -q -d "${nginx_prefix}/html" "${nginx_prefix}/html/Website.zip"
-        mv "${nginx_prefix}/html/nextcloud" "${nginx_prefix}/html/${true_domain_list[$1]}"
-        chown -R www-data:www-data "${nginx_prefix}/html/${true_domain_list[$1]}"
-    fi
-    rm -rf "${nginx_prefix}/html/Website.zip"
-}
 init_all_webs()
 {
     local i
@@ -1823,20 +1771,12 @@ print_share_link()
         yellow " Linux/安卓/路由器："
         for i in ${!domain_list[@]}
         do
-            if [ "${pretend_list[$i]}" == "1" ] || [ "${pretend_list[$i]}" == "2" ]; then
-                tyblue " vless://${xid_1}@${ip}:443?security=xtls&sni=${domain_list[$i]}&alpn=http%2F1.1&flow=xtls-rprx-splice"
-            else
-                tyblue " vless://${xid_1}@${ip}:443?security=xtls&sni=${domain_list[$i]}&flow=xtls-rprx-splice"
-            fi
+            tyblue " vless://${xid_1}@${ip}:443?security=xtls&sni=${domain_list[$i]}&alpn=http%2F1.1&flow=xtls-rprx-splice"
         done
         yellow " 其他："
         for i in ${!domain_list[@]}
         do
-            if [ "${pretend_list[$i]}" == "1" ] || [ "${pretend_list[$i]}" == "2" ]; then
-                tyblue " vless://${xid_1}@${ip}:443?security=xtls&sni=${domain_list[$i]}&alpn=http%2F1.1&flow=xtls-rprx-direct"
-            else
-                tyblue " vless://${xid_1}@${ip}:443?security=xtls&sni=${domain_list[$i]}&flow=xtls-rprx-direct"
-            fi
+            tyblue " vless://${xid_1}@${ip}:443?security=xtls&sni=${domain_list[$i]}&alpn=http%2F1.1&flow=xtls-rprx-direct"
         done
     fi
     if [ $protocol_3 -eq 1 ]; then
@@ -2058,7 +1998,7 @@ install_update_xray_tls_web()
     fi
     #此参数只在[ $update -eq 0 ]时有效
     local temp_remove_cloudreve=1
-    if [ $update -eq 0 ] && [ "${pretend_list[0]}" == "1" ] && [ $cloudreve_is_installed -eq 1 ]; then
+    if [ $update -eq 0 ] && [ $cloudreve_is_installed -eq 1 ]; then
         tyblue "----------------- Cloudreve已存在 -----------------"
         tyblue " 1. 使用现有Cloudreve"
         tyblue " 2. 卸载并重新安装"
@@ -2219,99 +2159,7 @@ reinit_domain()
     green "域名重置完成！！"
     print_config_info
 }
-add_domain()
-{
-    local need_cloudreve=0
-    check_need_cloudreve && need_cloudreve=1
-    readDomain
-    local i
-    for ((i=${#domain_list[@]}-1; i!=0;))
-    do
-        ((i--))
-        if [ "${domain_list[-1]}" == "${domain_list[$i]}" ] || [ "${domain_list[-1]}" == "${true_domain_list[$i]}" ] || [ "${true_domain_list[-1]}" == "${domain_list[$i]}" ] || [ "${true_domain_list[-1]}" == "${true_domain_list[$i]}" ]; then
-            red "域名已存在！"
-            return 1
-        fi
-    done
-    if [ "${pretend_list[-1]}" == "1" ] && [ $need_cloudreve -eq 1 ]; then
-        yellow "Cloudreve只能用于一个域名！！"
-        tyblue "Nextcloud可以用于多个域名"
-        return 1
-    fi
-    if ! get_cert "-1"; then
-        sleep 2s
-        systemctl restart xray nginx
-        red "申请证书失败！！"
-        red "域名添加失败"
-        return 1
-    fi
-    init_web "-1"
-    config_nginx
-    config_xray
-    sleep 2s
-    systemctl restart xray nginx
-    if [ "${pretend_list[-1]}" == "1" ]; then
-        if [ $cloudreve_is_installed -eq 0 ]; then
-            full_install_init_cloudreve "-1"
-        else
-            systemctl start cloudreve
-            systemctl enable cloudreve
-            let_change_cloudreve_domain "-1"
-        fi
-    else
-        turn_on_off_cloudreve
-        [ "${pretend_list[-1]}" == "2" ] && let_init_nextcloud "-1"
-    fi
-    green "域名添加完成！！"
-    print_config_info
-}
-delete_domain()
-{
-    if [ ${#domain_list[@]} -le 1 ]; then
-        red "只有一个域名"
-        return 1
-    fi
-    local i
-    tyblue "-----------------------请选择要删除的域名-----------------------"
-    for i in ${!domain_list[@]}
-    do
-        if [ ${domain_config_list[$i]} -eq 1 ]; then
-            tyblue " $((i+1)). ${domain_list[$i]} ${true_domain_list[$i]}"
-        else
-            tyblue " $((i+1)). ${domain_list[$i]}"
-        fi
-    done
-    yellow " 0. 不删除"
-    local delete=""
-    while ! [[ "$delete" =~ ^([1-9][0-9]*|0)$ ]] || [ $delete -gt ${#domain_list[@]} ]
-    do
-        read -p "你的选择是：" delete
-    done
-    [ $delete -eq 0 ] && return 0
-    ((delete--))
-    if [ "${pretend_list[$delete]}" == "2" ]; then
-        red "警告：此操作可能导致该域名下的Nextcloud网盘数据被删除"
-        ! ask_if "是否要继续？(y/n)" && return 0
-    fi
-    $HOME/.acme.sh/acme.sh --remove --domain ${true_domain_list[$delete]} --ecc
-    rm -rf $HOME/.acme.sh/${true_domain_list[$delete]}_ecc
-    rm -rf "${nginx_prefix}/certs/${true_domain_list[$delete]}.key" "${nginx_prefix}/certs/${true_domain_list[$delete]}.cer"
-    rm -rf ${nginx_prefix}/html/${true_domain_list[$delete]}
-    unset 'domain_list[$delete]'
-    unset 'true_domain_list[$delete]'
-    unset 'domain_config_list[$delete]'
-    unset 'pretend_list[$delete]'
-    domain_list=("${domain_list[@]}")
-    true_domain_list=("${true_domain_list[@]}")
-    domain_config_list=("${domain_config_list[@]}")
-    pretend_list=("${pretend_list[@]}")
-    config_nginx
-    config_xray
-    systemctl restart xray nginx
-    turn_on_off_cloudreve
-    green "域名删除完成！！"
-    print_config_info
-}
+
 reinit_cloudreve()
 {
     ! check_need_cloudreve && red "Cloudreve目前没有绑定域名" && return 1
@@ -2366,16 +2214,11 @@ change_pretend()
         yellow "伪装类型没有变化"
         return 1
     fi
-    if [ "${pretend_list[$change]}" == "2" ]; then
-        red "警告：此操作可能导致该域名下的Nextcloud网盘数据被删除"
-        ! ask_if "是否要继续？(y/n)" && return 0
-    fi
     local need_cloudreve=0
     check_need_cloudreve && need_cloudreve=1
     pretend_list[$change]="$pretend"
     if [ "$pretend" == "1" ] && [ $need_cloudreve -eq 1 ]; then
         yellow "Cloudreve只能用于一个域名！！"
-        tyblue "Nextcloud可以用于多个域名"
         return 1
     fi
     init_web "$change"
@@ -2391,7 +2234,6 @@ change_pretend()
         fi
     else
         turn_on_off_cloudreve
-        [ "$pretend" == "2" ] && let_init_nextcloud "$change"
     fi
     green "修改完成！"
 }
@@ -2565,8 +2407,6 @@ start_menu()
     tyblue "  15. 查看配置信息"
     tyblue "  16. 重置域名"
     purple "         将删除所有域名配置，安装过程中域名输错了造成Xray无法启动可以用此选项修复"
-    tyblue "  17. 添加域名"
-    tyblue "  18. 删除域名"
     tyblue "  19. 修改伪装网站类型"
     tyblue "  20. 重新初始化Cloudreve"
     purple "         将删除所有Cloudreve网盘的文件和帐户信息，管理员密码忘记可用此选项恢复"
@@ -2662,10 +2502,6 @@ start_menu()
         print_config_info
     elif [ $choice -eq 16 ]; then
         reinit_domain
-    elif [ $choice -eq 17 ]; then
-        add_domain
-    elif [ $choice -eq 18 ]; then
-        delete_domain
     elif [ $choice -eq 19 ]; then
         change_pretend
     elif [ $choice -eq 20 ]; then
