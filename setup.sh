@@ -2364,7 +2364,7 @@ start_menu()
     systemctl -q is-active xray && xray_status+="                \\033[32m运行中" || xray_status+="                \\033[31m未运行"
     local nginx_status
     [ $nginx_is_installed -eq 1 ] && nginx_status="\\033[32m已安装" || nginx_status="\\033[31m未安装"
-    systemctl -q is-active nginx && nginx_status+="                \\033[32m运行中" || nginx_status+="                \\033[31m未运行"              \\033[31m未运行"
+    systemctl -q is-active nginx && nginx_status+="                \\033[32m运行中" || nginx_status+="                \\033[31m未运行"
     local cloudreve_status
     [ $cloudreve_is_installed -eq 1 ] && cloudreve_status="\\033[32m已安装" || cloudreve_status="\\033[31m未安装"
     systemctl -q is-active cloudreve && cloudreve_status+="                \\033[32m运行中" || cloudreve_status+="                \\033[31m未运行"
@@ -2375,12 +2375,6 @@ start_menu()
     tyblue "           Nginx  ：           ${nginx_status}"
     echo
     tyblue "        Cloudreve ：           ${cloudreve_status}"
-    echo
-    tyblue "----------------------------------注意事项----------------------------------"
-    yellow " 1. 此脚本需要一个解析到本服务器的域名"
-    green  " 3. 建议在纯净的系统上使用此脚本 (VPS控制台-重置系统)"
-    tyblue "----------------------------------------------------------------------------"
-    echo
     echo
     tyblue " -----------安装/更新/卸载-----------"
     if [ $is_installed -eq 0 ]; then
